@@ -1,13 +1,15 @@
 # =====================================================================
-#  Skia Win x64 D3D12 static library build (v6)
-# ---------------------------------------------------------------------
-#  v6 vs v5: adds a trap that publishes STATUS.md + build.log back to the
-#  repository on failure, so the result is publicly readable via GitHub API
-#  without downloading authenticated Actions logs.
-#  (actions/checkout@v4 persists credentials, so git push works.)
+#  Skia Win x64 D3D12 static library build (v7)
+#  v7 vs v6: full-transcript logging (captures native stdout/stderr so a
+#  failed run's pushed build.log is actually diagnosable), freetype off,
+#  success also commits SHA256SUMS/args.gn/VERSION. Workflow unchanged.
 # =====================================================================
 
 $ErrorActionPreference = 'Continue'
+
+$wsRoot = $env:GITHUB_WORKSPACE; if (-not $wsRoot) { $wsRoot = (Get-Location).Path }
+$TRANSCRIPT = Join-Path $wsRoot 'logs\transcript.log'
+try { New-Item -ItemType Directory -Force -Path (Split-Path $TRANSCRIPT) | Out-Null; Start-Transcript -Path $TRANSCRIPT -Force | Out-Null } catch { Write-Host ('transcript start failed: ' + $_) }
 
 # ---- failure reporter: runs on any terminating error ----
 trap {
@@ -17,13 +19,11 @@ trap {
         $ws = $env:GITHUB_WORKSPACE
         if (-not $ws) { $ws = (Get-Location).Path }
         Set-Location $ws
-        if (Test-Path 'C:\skia\BUILD_LOG.txt') {
-            Copy-Item 'C:\skia\BUILD_LOG.txt' 'build.log' -Force
-            # keep only last 300 lines so the file stays small
-            Get-Content 'build.log' -Tail 300 | Out-File 'build.log' -Encoding utf8
-        } else {
-            "no BUILD_LOG.txt produced" | Out-File 'build.log' -Encoding utf8
-        }
+        try { Stop-Transcript | Out-Null } catch {}
+        $src = $null
+        if (Test-Path 'C:\skia\BUILD_LOG.txt') { $src = 'C:\skia\BUILD_LOG.txt' }
+        elseif (Test-Path $TRANSCRIPT) { $src = $TRANSCRIPT }
+        if ($src) { Get-Content $src -Tail 400 | Out-File 'build.log' -Encoding utf8 } else { 'no log produced' | Out-File 'build.log' -Encoding utf8 }
         $st = "STATUS: FAILED`n`ntime: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC`nrun: $env:GITHUB_RUN_ID`n`n--- error ---`n$errText"
         $st | Out-File 'STATUS.md' -Encoding utf8
         & git add -A
@@ -106,7 +106,7 @@ skia_use_dawn = false
 skia_use_harfbuzz = true
 skia_use_icu = true
 skia_enable_skparagraph = true
-skia_use_freetype = true
+skia_use_freetype = false
 is_component_build = false
 '@
 $argsGn | Out-File -FilePath out/Rel/args.gn -Encoding utf8
@@ -178,10 +178,15 @@ try {
     $ws = $env:GITHUB_WORKSPACE
     if (-not $ws) { $ws = (Get-Location).Path }
     Set-Location $ws
+    try { Stop-Transcript | Out-Null } catch {}
     $libs = (Get-ChildItem 'C:\skia\staging\lib\*.lib' | Select-Object -ExpandProperty Name) -join ', '
     ("STATUS: BUILT`n`ntime: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC`nrun: $env:GITHUB_RUN_ID`nskia: " + (Get-Content 'C:\skia\VERSION.txt')) |
         Out-File 'STATUS.md' -Encoding utf8
     "libs: $libs" | Out-File 'STATUS.md' -Append -Encoding utf8
+    Copy-Item 'C:\skia\staging\SHA256SUMS.txt' 'SHA256SUMS.txt' -Force -ErrorAction SilentlyContinue
+    Copy-Item 'C:\skia\staging\args.gn' 'args.gn' -Force -ErrorAction SilentlyContinue
+    Copy-Item 'C:\skia\VERSION.txt' 'VERSION.txt' -Force -ErrorAction SilentlyContinue
+    if (Test-Path $TRANSCRIPT) { Get-Content $TRANSCRIPT -Tail 400 | Out-File 'build.log' -Encoding utf8 }
     & git add -A
     & git -c user.email=ci@local -c user.name=ci commit -m "ci: built run $env:GITHUB_RUN_ID"
     & git push origin HEAD:main
