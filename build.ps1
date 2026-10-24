@@ -1,5 +1,5 @@
 # =====================================================================
-#  Skia Win x64 D3D12 static library build (v8)
+#  Skia Win x64 D3D12 static library build (v9)
 #  v8 vs v7: git-sync-deps is retried (resume-friendly) to survive
 #  transient HTTP 429 from the dep servers (many parallel clones hit a
 #  rate limit). Already-fetched deps are kept, so retries only redo the
@@ -60,6 +60,20 @@ if (-not (Test-Path 'C:\depot_tools\gn.bat')) {
     Check $c 'clone depot_tools'
 }
 $env:PATH = "C:\depot_tools;$env:PATH"
+# --- initialize depot_tools: create python3_bin_reldir.txt and install gn/ninja (CIPD) ---
+Log 'initializing depot_tools (gclient bootstrap)...'
+& cmd /c "C:\depot_tools\gclient.bat --version"
+Log ("gclient exit = " + $LASTEXITCODE)
+if (-not (Test-Path 'C:\depot_tools\python3_bin_reldir.txt')) {
+    Log 'marker missing -> running update_depot_tools.bat'
+    & cmd /c "C:\depot_tools\update_depot_tools.bat"
+    Log ("update_depot_tools exit = " + $LASTEXITCODE)
+}
+Log ("python3_bin_reldir.txt = " + (Test-Path 'C:\depot_tools\python3_bin_reldir.txt'))
+& cmd /c "gn --version"
+Log ("gn --version exit = " + $LASTEXITCODE)
+& cmd /c "ninja --version"
+Log ("ninja --version exit = " + $LASTEXITCODE)
 Log ("gn.bat    = " + (Test-Path 'C:\depot_tools\gn.bat'))
 Log ("ninja.bat = " + (Test-Path 'C:\depot_tools\ninja.bat'))
 
