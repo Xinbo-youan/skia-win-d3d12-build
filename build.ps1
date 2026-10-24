@@ -1,23 +1,40 @@
 # =====================================================================
-#  Skia Win x64 D3D12 static library build (v5)
+#  Skia Win x64 D3D12 static library build (v6)
 # ---------------------------------------------------------------------
-#  Root causes of previous failures and fixes:
-#   run#1  jlumbroso/free-disk-space does not support Windows   -> removed
-#   run#2  C:/depot_tools/gn.exe does not exist (only gn.bat)   -> use gn from PATH
-#   run#3  gn --version stderr treated as terminating error    -> Continue + try
-#   run#4  2>&1 turned python stderr into terminating error    -> no 2>&1 on pipes
-#   v5     1) no --args on command line at all; write out/Rel/args.gn directly
-#             (PowerShell/cmd/bash all re-parse quoted args; args.gn is GN's
-#              standard config file, one key = value per line, zero escaping)
-#          2) ninja uses *> redirection (pipe pollutes $LASTEXITCODE)
-#          3) capture $LASTEXITCODE into a local variable right after each call
-#          4) on failure print log tail so it shows up in Actions output even
-#             when artifact upload is skipped
-#  All identifiers are ASCII on purpose: a UTF-8-without-BOM script with
-#  non-ASCII identifiers may fail to parse depending on the PowerShell host.
+#  v6 vs v5: adds a trap that publishes STATUS.md + build.log back to the
+#  repository on failure, so the result is publicly readable via GitHub API
+#  without downloading authenticated Actions logs.
+#  (actions/checkout@v4 persists credentials, so git push works.)
 # =====================================================================
 
 $ErrorActionPreference = 'Continue'
+
+# ---- failure reporter: runs on any terminating error ----
+trap {
+    $errText = ($_ | Out-String)
+    Write-Host "==== TRAPPED ERROR ====\n$errText"
+    try {
+        $ws = $env:GITHUB_WORKSPACE
+        if (-not $ws) { $ws = (Get-Location).Path }
+        Set-Location $ws
+        if (Test-Path 'C:\skia\BUILD_LOG.txt') {
+            Copy-Item 'C:\skia\BUILD_LOG.txt' 'build.log' -Force
+            # keep only last 300 lines so the file stays small
+            Get-Content 'build.log' -Tail 300 | Out-File 'build.log' -Encoding utf8
+        } else {
+            "no BUILD_LOG.txt produced" | Out-File 'build.log' -Encoding utf8
+        }
+        $st = "STATUS: FAILED`n`ntime: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC`nrun: $env:GITHUB_RUN_ID`n`n--- error ---`n$errText"
+        $st | Out-File 'STATUS.md' -Encoding utf8
+        & git add -A
+        & git -c user.email=ci@local -c user.name=ci commit -m "ci: failed run $env:GITHUB_RUN_ID"
+        & git push origin HEAD:main
+        Write-Host 'failure report pushed'
+    } catch {
+        Write-Host ("push failure report failed: " + ($_ | Out-String))
+    }
+    exit 1
+}
 
 function Log($msg) {
     Write-Host ("[{0}] {1}" -f (Get-Date -Format 'HH:mm:ss'), $msg)
@@ -99,8 +116,7 @@ Get-Content out/Rel/args.gn
 & gn gen out/Rel
 $c = $LASTEXITCODE
 if ($c -ne 0) {
-    Write-Host '--- gn gen FAILED, args.gn: ---'
-    Get-Content out/Rel/args.gn
+    Write-Host '--- gn gen FAILED ---'
     throw "gn gen FAILED, exit=$c"
 }
 Log 'gn gen done'
@@ -155,5 +171,23 @@ Get-ChildItem "$out/lib/*.lib" | Get-FileHash -Algorithm SHA256 |
     ForEach-Object { ($_.Hash.ToLower() + '  ' + (Split-Path $_.Path -Leaf)) } |
     Out-File -FilePath "$out/SHA256SUMS.txt" -Encoding ascii
 Get-Content "$out/SHA256SUMS.txt"
+
+# ---- success: publish status ----
+Log '==== publishing STATUS.md ===='
+try {
+    $ws = $env:GITHUB_WORKSPACE
+    if (-not $ws) { $ws = (Get-Location).Path }
+    Set-Location $ws
+    $libs = (Get-ChildItem 'C:\skia\staging\lib\*.lib' | Select-Object -ExpandProperty Name) -join ', '
+    ("STATUS: BUILT`n`ntime: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC`nrun: $env:GITHUB_RUN_ID`nskia: " + (Get-Content 'C:\skia\VERSION.txt')) |
+        Out-File 'STATUS.md' -Encoding utf8
+    "libs: $libs" | Out-File 'STATUS.md' -Append -Encoding utf8
+    & git add -A
+    & git -c user.email=ci@local -c user.name=ci commit -m "ci: built run $env:GITHUB_RUN_ID"
+    & git push origin HEAD:main
+    Log 'STATUS.md pushed'
+} catch {
+    Log ("push STATUS failed: " + ($_ | Out-String))
+}
 
 Log '==== ALL DONE ===='
