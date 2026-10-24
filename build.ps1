@@ -183,6 +183,7 @@ if (Test-Path 'third_party/externals/icu/common/unicode') {
     Copy-Item 'third_party/externals/icu/common/unicode' -Destination "$out/include/unicode" -Recurse -Force
 }
 
+if (Test-Path out/Rel/icudtl.dat) { Copy-Item out/Rel/icudtl.dat -Destination "$out/icudtl.dat" -Force; Log 'staged icudtl.dat' }
 Copy-Item out/Rel/args.gn -Destination "$out/args.gn" -Force
 Copy-Item VERSION.txt     -Destination "$out/VERSION.txt" -Force
 if (Test-Path BUILD_LOG.txt) { Copy-Item BUILD_LOG.txt -Destination "$out/BUILD_LOG.txt" -Force }
