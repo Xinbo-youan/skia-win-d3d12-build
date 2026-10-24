@@ -1,8 +1,11 @@
 name: build
-
 on:
   workflow_dispatch:
-
+  push:
+    paths:
+      - 'build.ps1'
+permissions:
+  contents: write
 jobs:
   b:
     runs-on: windows-2022
@@ -12,10 +15,11 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-      - name: 构建
+      - name: 鏋勫缓
         shell: pwsh
         run: pwsh -File build.ps1
-      - name: 上传
+      - name: 涓婁紶
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: skia-d3d12-win-x64
