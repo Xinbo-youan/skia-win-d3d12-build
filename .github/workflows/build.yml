@@ -1,106 +1,24 @@
-# 把这个文件的内容复制到 .github/workflows/build.yml
-# （当前 PAT 缺 workflow scope，API 无法直接写入 .github/workflows/）
-
-name: build-skia-d3d12
+name: build
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  b:
     runs-on: windows-2022
     timeout-minutes: 300
-
     steps:
-      - name: 清理磁盘
-        continue-on-error: true
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: true
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          swap-storage: true
-          docker-images: false
-
-      - name: 安装 depot_tools
-        shell: pwsh
-        run: |
-          git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git C:/depot_tools
-          "C:/depot_tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: 拉取 Skia 源码
-        shell: pwsh
-        run: |
-          git clone --depth 1 https://skia.googlesource.com/skia.git C:/skia
-          cd C:/skia
-          git rev-parse HEAD | Out-File -FilePath VERSION.txt -Encoding ascii
-          Get-Content VERSION.txt
-
-      - name: 拉取第三方依赖
-        shell: pwsh
-        run: |
-          cd C:/skia
-          python tools/git-sync-deps
-
-      - name: 配置 MSVC 环境
-        uses: ilammy/msvc-dev-cmd@v1
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-
-      - name: 记录编译器版本
-        shell: cmd
-        run: |
-          cd /d C:\skia
-          cl 2>&1 | findstr /C:"Microsoft" > CL_VERSION.txt
-          type CL_VERSION.txt
-
-      - name: gn gen
+      - name: 构建
         shell: pwsh
-        run: |
-          cd C:/skia
-          $gnArgs = 'is_official_build=false is_debug=false target_cpu="x64" is_clang=false cc="cl" cxx="cl" skia_enable_ganesh=true skia_use_direct3d=true skia_use_dawn=false skia_use_harfbuzz=true skia_use_icu=true skia_enable_skparagraph=true skia_use_freetype=true is_component_build=false'
-          Write-Host "ARGS: $gnArgs"
-          & C:/depot_tools/gn.exe gen out/Rel --args=$gnArgs
-          Get-Content out/Rel/args.gn
-
-      - name: 编译
-        shell: pwsh
-        run: |
-          cd C:/skia
-          & C:/depot_tools/ninja.exe -C out/Rel skia skparagraph skshaper skunicode 2>&1 | Tee-Object -FilePath BUILD_LOG.txt
-          if ($LASTEXITCODE -ne 0) { throw "ninja failed: $LASTEXITCODE" }
-
-      - name: 打包
-        shell: pwsh
-        run: |
-          cd C:/skia
-          $out = 'staging'
-          New-Item -ItemType Directory -Force -Path "$out/lib" | Out-Null
-          Copy-Item out/Rel/*.lib -Destination "$out/lib/" -Force
-          New-Item -ItemType Directory -Force -Path "$out/include" | Out-Null
-          foreach ($d in @('include/core','include/config','include/effects','include/utils','include/codec','include/encode','include/gpu','include/ports')) {
-            if (Test-Path $d) { Copy-Item $d -Destination "$out/include/" -Recurse -Force }
-          }
-          New-Item -ItemType Directory -Force -Path "$out/include/modules" | Out-Null
-          foreach ($m in @('skparagraph','skshaper','skunicode')) {
-            if (Test-Path "modules/$m/include") { Copy-Item "modules/$m/include" -Destination "$out/include/modules/$m" -Recurse -Force }
-          }
-          if (Test-Path 'third_party/externals/harfbuzz/src') { Copy-Item 'third_party/externals/harfbuzz/src' -Destination "$out/include/harfbuzz" -Recurse -Force }
-          if (Test-Path 'third_party/externals/icu/common') { Copy-Item 'third_party/externals/icu/common/unicode' -Destination "$out/include/unicode" -Recurse -Force }
-          Copy-Item out/Rel/args.gn -Destination "$out/args.gn" -Force
-          Copy-Item VERSION.txt -Destination "$out/VERSION.txt" -Force
-          Copy-Item CL_VERSION.txt -Destination "$out/CL_VERSION.txt" -Force
-          Copy-Item BUILD_LOG.txt -Destination "$out/BUILD_LOG.txt" -Force
-          Get-ChildItem "$out/lib/*.lib" | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Out-File -FilePath "$out/SHA256SUMS.txt" -Encoding ascii
-          Get-Content "$out/SHA256SUMS.txt"
-
-      - name: 上传产物
+        run: pwsh -File build.ps1
+      - name: 上传
         uses: actions/upload-artifact@v4
         with:
           name: skia-d3d12-win-x64
           path: C:/skia/staging/
           compression-level: 0
           retention-days: 5
-          if-no-files-found: error
