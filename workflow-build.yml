@@ -1,0 +1,24 @@
+name: build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  b:
+    runs-on: windows-2022
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: 构建
+        shell: pwsh
+        run: pwsh -File build.ps1
+      - name: 上传
+        uses: actions/upload-artifact@v4
+        with:
+          name: skia-d3d12-win-x64
+          path: C:/skia/staging/
+          compression-level: 0
+          retention-days: 5
