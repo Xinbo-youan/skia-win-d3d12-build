@@ -1,8 +1,9 @@
 # =====================================================================
-#  Skia Win x64 D3D12 static library build (v7)
-#  v7 vs v6: full-transcript logging (captures native stdout/stderr so a
-#  failed run's pushed build.log is actually diagnosable), freetype off,
-#  success also commits SHA256SUMS/args.gn/VERSION. Workflow unchanged.
+#  Skia Win x64 D3D12 static library build (v8)
+#  v8 vs v7: git-sync-deps is retried (resume-friendly) to survive
+#  transient HTTP 429 from the dep servers (many parallel clones hit a
+#  rate limit). Already-fetched deps are kept, so retries only redo the
+#  failed ones. Also sets large postBuffer for big packs.
 # =====================================================================
 
 $ErrorActionPreference = 'Continue'
@@ -74,11 +75,20 @@ $skiaVer = ((& git rev-parse HEAD) | Out-String).Trim()
 $skiaVer | Out-File -FilePath VERSION.txt -Encoding ascii
 Log ("skia commit = " + $skiaVer)
 
-# ---------------- 3/7 third_party deps ----------------
+# ---------------- 3/7 third_party deps (resume-friendly retry) ----------------
 Log '==== [3/7] third_party deps ===='
-& python tools/git-sync-deps
-$c = $LASTEXITCODE
-Check $c 'git-sync-deps'
+& git config --global http.postBuffer 524288000
+& git config --global advice.detachedHead false
+$depsOk = $false
+for ($attempt = 1; $attempt -le 8; $attempt++) {
+    Log ("git-sync-deps attempt {0}/8" -f $attempt)
+    & python tools/git-sync-deps
+    $c = $LASTEXITCODE
+    if ($c -eq 0) { $depsOk = $true; break }
+    Log ("attempt {0} failed (exit={1}); likely transient 429/network. Sleeping 20s then resuming (already-fetched deps kept)..." -f $attempt, $c)
+    Start-Sleep -Seconds 20
+}
+if (-not $depsOk) { throw "git-sync-deps FAILED after 8 attempts" }
 Log 'deps done'
 
 # ---------------- 4/7 toolchain info ----------------
