@@ -1,0 +1,64 @@
+**********************
+PowerShell transcript start
+Start time: 20261024172902
+Username: runnervma5ucf\runneradmin
+RunAs User: runnervma5ucf\runneradmin
+Configuration Name: 
+Machine: runnervma5ucf (Microsoft Windows NT 10.0.20348.0)
+Host Application: C:\Program Files\PowerShell\7\pwsh.dll -File build.ps1
+Process ID: 2556
+PSVersion: 7.6.8
+PSEdition: Core
+GitCommitId: 7.6.8
+OS: Microsoft Windows 10.0.20348
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.4
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+[17:29:02] ==== [0/7] environment ====
+[17:29:02] PSVersion : 7.6.8
+[17:29:03] python    : Python 3.12.10
+[17:29:03] git       : git version 2.56.0.windows.3
+
+Name FreeGB
+---- ------
+C     78.80
+
+[17:29:03] ==== [1/7] depot_tools ====
+
+[17:29:04] gn.bat    = True
+[17:29:04] ninja.bat = True
+[17:29:04] ==== [2/7] skia source ====
+
+[17:29:21] skia commit = a625b5349f7048005a4ce9612b74ffcce458982e
+[17:29:21] ==== [3/7] third_party deps ====
+
+
+[17:29:21] git-sync-deps attempt 1/8
+
+[17:33:42] deps done
+[17:33:42] ==== [4/7] toolchain info ====
+
+python3_bin_reldir.txt not found. need to initialize depot_tools by
+running gclient or update_depot_tools
+[17:33:43] gn    = python3_bin_reldir.txt not found. need to initialize depot_tools by 
+running gclient or update_depot_tools
+python3_bin_reldir.txt not found. need to initialize depot_tools by
+running gclient or update_depot_tools
+[17:33:43] ninja = python3_bin_reldir.txt not found. need to initialize depot_tools by 
+running gclient or update_depot_tools
+[17:33:43] ==== [5/7] gn gen ====
+[17:33:43] --- args.gn ---
+
+--- gn gen FAILED ---
+==== TRAPPED ERROR ====\nException: D:\a\skia-win-d3d12-build\skia-win-d3d12-build\build.ps1:130
+Line |
+ 130 |      throw "gn gen FAILED, exit=$c"
+     |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | gn gen FAILED, exit=1
+**********************
+PowerShell transcript end
+End time: 20261024173343
+**********************
