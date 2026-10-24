@@ -1,0 +1,1 @@
+$b=Get-Content "$PSScriptRoot\build.ps1" -Raw; Write-Output $b.Length
